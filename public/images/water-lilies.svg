@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="600" viewBox="0 0 900 600">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0b2e3a"/>
+      <stop offset="0.55" stop-color="#0f4a4d"/>
+      <stop offset="1" stop-color="#1a6b52"/>
+    </linearGradient>
+    <filter id="soft">
+      <feGaussianBlur stdDeviation="10" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="900" height="600" fill="url(#g)"/>
+  <g opacity="0.85" filter="url(#soft)">
+    <ellipse cx="220" cy="270" rx="150" ry="60" fill="#a7d7b5" opacity="0.5"/>
+    <ellipse cx="520" cy="340" rx="210" ry="70" fill="#c1e2c7" opacity="0.35"/>
+    <ellipse cx="720" cy="240" rx="170" ry="55" fill="#b3ddc2" opacity="0.4"/>
+    <circle cx="520" cy="338" r="26" fill="#f6d25b" opacity="0.65"/>
+    <circle cx="720" cy="242" r="22" fill="#f6d25b" opacity="0.55"/>
+  </g>
+  <text x="28" y="560" fill="rgba(255,255,255,0.75)" font-family="ui-sans-serif, system-ui" font-size="28">Water Lilies</text>
+</svg>

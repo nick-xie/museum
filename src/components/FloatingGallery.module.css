@@ -1,0 +1,124 @@
+.stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.edges {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.node {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate3d(0, 0, 0);
+  translate: -50% -50%;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.node:focus-visible {
+  outline: 2px solid rgba(195, 147, 255, 0.75);
+  outline-offset: 6px;
+  border-radius: 14px;
+}
+
+.thumb {
+  width: 78px;
+  height: 78px;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06) inset,
+    0 18px 40px rgba(0, 0, 0, 0.45);
+  background: rgba(255, 255, 255, 0.03);
+  transition:
+    transform 220ms ease,
+    box-shadow 220ms ease,
+    filter 220ms ease;
+  filter: saturate(1.05);
+}
+
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  animation: float 6.5s ease-in-out infinite;
+  animation-delay: var(--phase, 0s);
+}
+
+.node:hover .thumb {
+  transform: scale(1.08);
+  box-shadow:
+    0 0 0 1px rgba(195, 147, 255, 0.22) inset,
+    0 0 22px rgba(195, 147, 255, 0.18),
+    0 18px 40px rgba(0, 0, 0, 0.55);
+  filter: saturate(1.2) contrast(1.05);
+}
+
+.label {
+  display: grid;
+  gap: 2px;
+  text-align: center;
+  max-width: 180px;
+  opacity: 0.82;
+  transition: opacity 220ms ease, transform 220ms ease;
+  transform: translateY(-2px);
+  pointer-events: none;
+}
+
+.node:hover .label {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.title {
+  font: 600 12px/1.15 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto;
+  color: rgba(245, 246, 255, 0.92);
+  letter-spacing: 0.2px;
+  text-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+}
+
+.meta {
+  font: 500 11px/1.1 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto;
+  color: rgba(200, 205, 225, 0.72);
+}
+
+.hint {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font: 500 12px/1.1 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto;
+  color: rgba(220, 225, 245, 0.72);
+  background: rgba(10, 10, 14, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
+}
+
+@keyframes float {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+

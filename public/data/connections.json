@@ -1,0 +1,41 @@
+[
+  {
+    "source": "starry-night",
+    "target": "water-lilies",
+    "score": 7,
+    "reasons": [
+      "nature",
+      "dreamlike",
+      "blue",
+      "yellow"
+    ]
+  },
+  {
+    "source": "starry-night",
+    "target": "the-scream",
+    "score": 4,
+    "reasons": [
+      "restless",
+      "blue",
+      "black"
+    ]
+  },
+  {
+    "source": "the-kiss",
+    "target": "the-scream",
+    "score": 3,
+    "reasons": [
+      "electric",
+      "black"
+    ]
+  },
+  {
+    "source": "guernica",
+    "target": "the-scream",
+    "score": 3,
+    "reasons": [
+      "alarming",
+      "black"
+    ]
+  }
+]

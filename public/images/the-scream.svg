@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="600" viewBox="0 0 900 600">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4a0a0a"/>
+      <stop offset="0.55" stop-color="#b13b0f"/>
+      <stop offset="1" stop-color="#0b2f66"/>
+    </linearGradient>
+    <filter id="heat">
+      <feTurbulence type="fractalNoise" baseFrequency="0.008" numOctaves="2" seed="8"/>
+      <feDisplacementMap in="SourceGraphic" scale="18"/>
+    </filter>
+  </defs>
+  <rect width="900" height="600" fill="url(#sky)"/>
+  <g opacity="0.7" filter="url(#heat)">
+    <path d="M-40,220 C140,160 260,280 420,220 C580,160 700,300 940,210" fill="none" stroke="#ffd08a" stroke-width="24" stroke-opacity="0.5" stroke-linecap="round"/>
+    <path d="M-40,310 C140,250 260,380 420,310 C580,240 720,390 940,300" fill="none" stroke="#ff905a" stroke-width="22" stroke-opacity="0.45" stroke-linecap="round"/>
+  </g>
+  <circle cx="465" cy="350" r="68" fill="rgba(255,255,255,0.1)"/>
+  <text x="28" y="560" fill="rgba(255,255,255,0.75)" font-family="ui-sans-serif, system-ui" font-size="28">The Scream</text>
+</svg>
