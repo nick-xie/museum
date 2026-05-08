@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build && cp CNAME dist/",
+    "build": "tsc -b && vite build",
     "gen:connections": "node scripts/generateConnections.js",
     "lint": "eslint .",
     "preview": "vite preview"
