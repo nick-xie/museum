@@ -7,10 +7,11 @@
   cursor: grab;
 }
 
-.edges {
+.perspective {
   position: absolute;
   inset: 0;
-  pointer-events: none;
+  perspective: min(1180px, 135vw);
+  perspective-origin: 50% 46%;
 }
 
 .world {
@@ -18,11 +19,55 @@
   left: 0;
   top: 0;
   transform-origin: 0 0;
+  transform-style: preserve-3d;
   will-change: transform;
 }
 
-.node {
+.orbit {
+  position: relative;
+  transform-style: preserve-3d;
+  transform-origin: center center;
+  will-change: transform;
+}
+
+.edge3d {
   position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 50%;
+  transform-style: preserve-3d;
+  pointer-events: none;
+  border-radius: 2px;
+  background: linear-gradient(
+    90deg,
+    rgba(195, 147, 255, 0.92),
+    rgba(195, 147, 255, 0.72)
+  );
+  box-shadow:
+    0 0 12px rgba(195, 147, 255, 0.35),
+    0 0 4px rgba(195, 147, 255, 0.5);
+  will-change: transform, opacity;
+}
+
+.nodeAnchor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  overflow: visible;
+  transform-origin: 0 0;
+  transform-style: preserve-3d;
+}
+
+.nodeFace {
+  transform-style: preserve-3d;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+.node {
+  position: relative;
   left: 0;
   top: 0;
   transform: translate3d(0, 0, 0);

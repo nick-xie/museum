@@ -13,6 +13,7 @@ import {
   forceLink,
   forceManyBody,
   forceSimulation,
+  type Simulation,
   type SimulationLinkDatum,
   type SimulationNodeDatum,
 } from "d3-force"
@@ -27,6 +28,8 @@ type Node = {
   vx?: number
   vy?: number
   driftPhase: number
+  /** Depth in px along orbit local Z; layout stays 2D, links + billboards use this. */
+  z: number
 }
 
 type SimNode = Node & SimulationNodeDatum
@@ -41,9 +44,59 @@ type Props = {
   onSelect: (id: string) => void
 }
 
+/** Default orbit: spin (Y) + light pitch (X). Nodes billboard so thumbs stay readable. */
+const INITIAL_TILT = { rx: -4, ry: 10 }
+/** Max pitch of the whole graph. */
+const MAX_TILT_X = 14
+/** Gentle reheat of the force sim while orbiting or panning (initial load uses alpha 0.9). */
+const NUDGE_SIM_ALPHA_CAP = 0.1
+const NUDGE_SIM_ALPHA_BUMP = 0.014
+const RESET_VIEW_MS = 900
+
+function easeOutCubic(t: number) {
+  return 1 - (1 - t) ** 3
+}
+
+/** Shortest signed delta from `fromDeg` to `toDeg` for smooth spin rewind. */
+function shortestAngleDelta(fromDeg: number, toDeg: number) {
+  let d = toDeg - fromDeg
+  d = ((d % 360) + 360) % 360
+  if (d > 180) d -= 360
+  return d
+}
+
+function edgeSegmentStyle(
+  ax: number,
+  ay: number,
+  az: number,
+  bx: number,
+  by: number,
+  bz: number,
+): { width: number; transform: string } {
+  const dx = bx - ax
+  const dy = by - ay
+  const dz = bz - az
+  const len = Math.hypot(dx, dy, dz)
+  if (len < 0.5) {
+    return { width: 0.5, transform: `translate3d(${ax}px, ${ay}px, ${az}px)` }
+  }
+  const lenXY = Math.hypot(dx, dy)
+  const yawDeg = (Math.atan2(dy, dx) * 180) / Math.PI
+  const pitchDeg =
+    lenXY < 1e-5 ? (dz >= 0 ? -90 : 90) : ((-Math.atan2(dz, lenXY) * 180) / Math.PI)
+  return {
+    width: len,
+    transform: `translate3d(${ax}px, ${ay}px, ${az}px) rotateZ(${yawDeg}deg) rotateY(${pitchDeg}deg)`,
+  }
+}
+
 export function FloatingGallery({ artworks, connections, seed = "museum", onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const initialViewRef = useRef<{ pan: { x: number; y: number }; zoom: number } | null>(null)
+  const initialViewRef = useRef<{
+    pan: { x: number; y: number }
+    zoom: number
+    tilt: { rx: number; ry: number }
+  } | null>(null)
   const dragState = useRef<{
     pointerId: number
     startX: number
@@ -52,12 +105,36 @@ export function FloatingGallery({ artworks, connections, seed = "museum", onSele
     startPanY: number
     moved: boolean
   } | null>(null)
+  const rotateState = useRef<{
+    pointerId: number
+    startX: number
+    startY: number
+    startRx: number
+    startRy: number
+  } | null>(null)
   const suppressClickRef = useRef(false)
+  const simRef = useRef<Simulation<SimNode, undefined> | null>(null)
+  const resetAnimRafRef = useRef<number | null>(null)
+  const latestViewRef = useRef({
+    pan: { x: 0, y: 0 },
+    zoom: 1,
+    tilt: { ...INITIAL_TILT },
+  })
   const [size, setSize] = useState({ w: 1000, h: 700 })
   const [positions, setPositions] = useState<Map<string, { x: number; y: number }>>(() => new Map())
   const [hovered, setHovered] = useState<string | null>(null)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [zoom, setZoom] = useState(1)
+  /** Orbit tilt in degrees (CSS rotateX / rotateY on the constellation). */
+  const [tilt, setTilt] = useState(() => ({ ...INITIAL_TILT }))
+
+  latestViewRef.current = { pan: { ...pan }, zoom, tilt: { ...tilt } }
+
+  useEffect(() => {
+    return () => {
+      if (resetAnimRafRef.current != null) cancelAnimationFrame(resetAnimRafRef.current)
+    }
+  }, [])
 
   useEffect(() => {
     const el = containerRef.current
@@ -79,6 +156,7 @@ export function FloatingGallery({ artworks, connections, seed = "museum", onSele
       x: rng.float(0.2, 0.8),
       y: rng.float(0.2, 0.8),
       driftPhase: rng.float(0, Math.PI * 2),
+      z: rng.float(-140, 140),
     }))
 
     const nodeById = new Map(nodes.map((n) => [n.id, n]))
@@ -88,6 +166,8 @@ export function FloatingGallery({ artworks, connections, seed = "museum", onSele
 
     return { nodes, links }
   }, [artworks, connections, seed])
+
+  const depthById = useMemo(() => new Map(nodes.map((n) => [n.id, n.z])), [nodes])
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -101,16 +181,18 @@ export function FloatingGallery({ artworks, connections, seed = "museum", onSele
       .alpha(0.9)
       .alphaDecay(0.025)
       .velocityDecay(0.35)
-      .force("charge", forceManyBody().strength(-180))
+      .force("charge", forceManyBody().strength(-420))
       .force("center", forceCenter(size.w / 2, size.h / 2))
       .force(
         "link",
         forceLink<SimNode, SimLink>(simLinks)
           .id((d) => d.id)
-          .distance((d) => Math.max(180, 360 - Math.min(180, d.score * 18)))
-          .strength((d) => Math.min(0.28, 0.06 + d.score / 55)),
+          .distance((d) => Math.max(300, 560 - Math.min(220, d.score * 22)))
+          .strength((d) => Math.min(0.22, 0.05 + d.score / 62)),
       )
-      .force("collide", forceCollide(64).strength(0.9))
+      .force("collide", forceCollide(82).strength(0.92))
+
+    simRef.current = sim
 
     let raf = 0
     const tick = () => {
@@ -124,9 +206,18 @@ export function FloatingGallery({ artworks, connections, seed = "museum", onSele
     sim.on("tick", tick)
     return () => {
       sim.stop()
+      if (simRef.current === sim) simRef.current = null
       cancelAnimationFrame(raf)
     }
   }, [nodes, links, size.w, size.h])
+
+  const nudgeLayout = useCallback(() => {
+    const sim = simRef.current
+    if (!sim) return
+    const next = Math.min(NUDGE_SIM_ALPHA_CAP, sim.alpha() + NUDGE_SIM_ALPHA_BUMP)
+    sim.alpha(next)
+    sim.restart()
+  }, [])
 
   const edgeOpacity = (a: string, b: string) => {
     if (!hovered) return 0.22
@@ -147,7 +238,7 @@ export function FloatingGallery({ artworks, connections, seed = "museum", onSele
 
     const spanX = Math.max(1, maxX - minX)
     const spanY = Math.max(1, maxY - minY)
-    const padding = size.w >= 1024 ? 380 : 240
+    const padding = size.w >= 1024 ? 420 : 280
 
     const nextZoom = clampZoom(
       Math.min((size.w - padding) / spanX, (size.h - padding) / spanY),
@@ -165,24 +256,61 @@ export function FloatingGallery({ artworks, connections, seed = "museum", onSele
     }
   }, [positions, size.w, size.h])
 
-  const fitToView = () => {
-    const fit = getFitView()
-    if (!fit) {
-      setPan({ x: 0, y: 0 })
-      setZoom(1)
-      return
+  const cancelResetAnimation = useCallback(() => {
+    if (resetAnimRafRef.current != null) {
+      cancelAnimationFrame(resetAnimRafRef.current)
+      resetAnimRafRef.current = null
     }
-    setZoom(fit.zoom)
-    setPan(fit.pan)
-  }
+  }, [])
+
+  const animateViewTo = useCallback(
+    (to: { pan: { x: number; y: number }; zoom: number; tilt: { rx: number; ry: number } }) => {
+      cancelResetAnimation()
+      const from = {
+        pan: { ...latestViewRef.current.pan },
+        zoom: latestViewRef.current.zoom,
+        tilt: { ...latestViewRef.current.tilt },
+      }
+      const start = performance.now()
+      const ryDelta = shortestAngleDelta(from.tilt.ry, to.tilt.ry)
+
+      const step = (now: number) => {
+        const t = Math.min(1, (now - start) / RESET_VIEW_MS)
+        const e = easeOutCubic(t)
+        setPan({
+          x: from.pan.x + (to.pan.x - from.pan.x) * e,
+          y: from.pan.y + (to.pan.y - from.pan.y) * e,
+        })
+        setZoom(from.zoom + (to.zoom - from.zoom) * e)
+        setTilt({
+          rx: from.tilt.rx + (to.tilt.rx - from.tilt.rx) * e,
+          ry: from.tilt.ry + ryDelta * e,
+        })
+        if (t < 1) {
+          resetAnimRafRef.current = requestAnimationFrame(step)
+        } else {
+          resetAnimRafRef.current = null
+          setPan({ ...to.pan })
+          setZoom(to.zoom)
+          setTilt({ ...to.tilt })
+        }
+      }
+      resetAnimRafRef.current = requestAnimationFrame(step)
+    },
+    [cancelResetAnimation],
+  )
 
   const resetView = () => {
     if (initialViewRef.current) {
-      setZoom(initialViewRef.current.zoom)
-      setPan(initialViewRef.current.pan)
+      animateViewTo(initialViewRef.current)
       return
     }
-    fitToView()
+    const fit = getFitView()
+    if (!fit) {
+      animateViewTo({ pan: { x: 0, y: 0 }, zoom: 1, tilt: { ...INITIAL_TILT } })
+      return
+    }
+    animateViewTo({ ...fit, tilt: { ...INITIAL_TILT } })
   }
 
   useEffect(() => {
@@ -190,7 +318,7 @@ export function FloatingGallery({ artworks, connections, seed = "museum", onSele
     if (positions.size < Math.max(2, artworks.length)) return
     const fit = getFitView()
     if (!fit) return
-    initialViewRef.current = fit
+    initialViewRef.current = { ...fit, tilt: { ...INITIAL_TILT } }
     setZoom(fit.zoom)
     setPan(fit.pan)
   }, [positions, artworks.length, size.w, size.h, getFitView])
@@ -198,6 +326,7 @@ export function FloatingGallery({ artworks, connections, seed = "museum", onSele
   const onWheel = (e: React.WheelEvent<HTMLDivElement>) => {
     e.preventDefault()
     if (!containerRef.current) return
+    cancelResetAnimation()
 
     const rect = containerRef.current.getBoundingClientRect()
     const cx = e.clientX - rect.left
@@ -214,24 +343,54 @@ export function FloatingGallery({ artworks, connections, seed = "museum", onSele
     setZoom(nextZoom)
   }
 
+  const clampTiltX = (rx: number) => Math.max(-MAX_TILT_X, Math.min(MAX_TILT_X, rx))
+
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (!containerRef.current) return
     if (e.button !== 0) return
     const target = e.target as HTMLElement
     if (target.closest("[data-control='true']")) return
     if (target.closest("[data-node='true']")) return
-    dragState.current = {
-      pointerId: e.pointerId,
-      startX: e.clientX,
-      startY: e.clientY,
-      startPanX: pan.x,
-      startPanY: pan.y,
-      moved: false,
+
+    cancelResetAnimation()
+
+    if (e.shiftKey) {
+      rotateState.current = {
+        pointerId: e.pointerId,
+        startX: e.clientX,
+        startY: e.clientY,
+        startRx: tilt.rx,
+        startRy: tilt.ry,
+      }
+      nudgeLayout()
+    } else {
+      dragState.current = {
+        pointerId: e.pointerId,
+        startX: e.clientX,
+        startY: e.clientY,
+        startPanX: pan.x,
+        startPanY: pan.y,
+        moved: false,
+      }
+      nudgeLayout()
     }
     containerRef.current.setPointerCapture(e.pointerId)
   }
 
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const rot = rotateState.current
+    if (rot && rot.pointerId === e.pointerId) {
+      const dx = e.clientX - rot.startX
+      const dy = e.clientY - rot.startY
+      if (Math.abs(dx) + Math.abs(dy) > 4) suppressClickRef.current = true
+      setTilt({
+        rx: clampTiltX(rot.startRx - dy * 0.2),
+        ry: rot.startRy + dx * 0.45,
+      })
+      nudgeLayout()
+      return
+    }
+
     const drag = dragState.current
     if (!drag || drag.pointerId !== e.pointerId) return
 
@@ -246,9 +405,22 @@ export function FloatingGallery({ artworks, connections, seed = "museum", onSele
       x: drag.startPanX + dx,
       y: drag.startPanY + dy,
     })
+    nudgeLayout()
   }
 
   const onPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const rot = rotateState.current
+    if (rot && rot.pointerId === e.pointerId) {
+      if (containerRef.current?.hasPointerCapture(e.pointerId)) {
+        containerRef.current.releasePointerCapture(e.pointerId)
+      }
+      rotateState.current = null
+      window.setTimeout(() => {
+        suppressClickRef.current = false
+      }, 0)
+      return
+    }
+
     const drag = dragState.current
     if (!drag || drag.pointerId !== e.pointerId) return
     if (containerRef.current?.hasPointerCapture(e.pointerId)) {
@@ -270,83 +442,100 @@ export function FloatingGallery({ artworks, connections, seed = "museum", onSele
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
     >
-      <div
-        className={styles.world}
-        style={{
-          width: size.w,
-          height: size.h,
-          transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
-        }}
-      >
-        <svg className={styles.edges} width={size.w} height={size.h} aria-hidden="true">
-          <defs>
-            <filter id="edgeGlow" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="2.8" result="blur" />
-              <feMerge>
-                <feMergeNode in="blur" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-          </defs>
-          {connections.map((c) => {
-            const a = positions.get(c.source)
-            const b = positions.get(c.target)
-            if (!a || !b) return null
-            const op = edgeOpacity(c.source, c.target)
-            const w = Math.max(1, Math.min(2.6, 0.7 + c.score / 7))
-            return (
-              <line
-                key={`${c.source}__${c.target}`}
-                x1={a.x}
-                y1={a.y}
-                x2={b.x}
-                y2={b.y}
-                stroke="rgba(195, 147, 255, 0.9)"
-                strokeOpacity={op}
-                strokeWidth={w}
-                filter="url(#edgeGlow)"
-              />
-            )
-          })}
-        </svg>
+      <div className={styles.perspective}>
+        <div
+          className={styles.world}
+          style={{
+            width: size.w,
+            height: size.h,
+            transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
+          }}
+        >
+          <div
+            className={styles.orbit}
+            style={{
+              width: size.w,
+              height: size.h,
+              transform: `rotateY(${tilt.ry}deg) rotateX(${tilt.rx}deg)`,
+            }}
+          >
+            {connections.map((c) => {
+              const a = positions.get(c.source)
+              const b = positions.get(c.target)
+              if (!a || !b) return null
+              if (!depthById.has(c.source) || !depthById.has(c.target)) return null
+              const za = depthById.get(c.source) ?? 0
+              const zb = depthById.get(c.target) ?? 0
+              const op = edgeOpacity(c.source, c.target)
+              const h = Math.max(1.2, Math.min(2.8, 0.85 + c.score / 7))
+              const { width, transform } = edgeSegmentStyle(a.x, a.y, za, b.x, b.y, zb)
+              return (
+                <div
+                  key={`${c.source}__${c.target}`}
+                  className={styles.edge3d}
+                  style={
+                    {
+                      width,
+                      height: h,
+                      opacity: op,
+                      transform,
+                    } as CSSProperties
+                  }
+                  aria-hidden
+                />
+              )
+            })}
 
-        {artworks.map((a) => {
-          const p = positions.get(a.id)
-          if (!p) return null
-          const drift = nodes.find((n) => n.id === a.id)?.driftPhase ?? 0
+            {artworks.map((a) => {
+              const p = positions.get(a.id)
+              if (!p) return null
+              const meta = nodes.find((n) => n.id === a.id)
+              const drift = meta?.driftPhase ?? 0
+              const z = meta?.z ?? 0
 
-          return (
-            <button
-              key={a.id}
-              type="button"
-              data-node="true"
-              className={styles.node}
-              style={
-                {
-                  transform: `translate3d(${p.x}px, ${p.y}px, 0)`,
-                  "--phase": `${drift}s`,
-                } as CSSVars
-              }
-              onClick={() => {
-                if (!suppressClickRef.current) onSelect(a.id)
-              }}
-              onPointerEnter={() => setHovered(a.id)}
-              onPointerLeave={() => setHovered(null)}
-            >
-              <span className={styles.thumb}>
-                <img src={a.imageUrl} alt={`${a.title} by ${a.artist}`} draggable={false} />
-              </span>
-              <span className={styles.label}>
-                <span className={styles.title}>{a.title}</span>
-                <span className={styles.meta}>{a.artist}</span>
-              </span>
-            </button>
-          )
-        })}
+              return (
+                <div
+                  key={a.id}
+                  className={styles.nodeAnchor}
+                  style={{ transform: `translate3d(${p.x}px, ${p.y}px, ${z}px)` }}
+                >
+                  <div
+                    className={styles.nodeFace}
+                    style={{
+                      transform: `rotateX(${-tilt.rx}deg) rotateY(${-tilt.ry}deg)`,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      data-node="true"
+                      className={styles.node}
+                      style={{ "--phase": `${drift}s` } as CSSVars}
+                      onClick={() => {
+                        if (!suppressClickRef.current) onSelect(a.id)
+                      }}
+                      onPointerEnter={() => setHovered(a.id)}
+                      onPointerLeave={() => setHovered(null)}
+                    >
+                      <span className={styles.thumb}>
+                        <img src={a.imageUrl} alt={`${a.title} by ${a.artist}`} draggable={false} />
+                      </span>
+                      <span className={styles.label}>
+                        <span className={styles.title}>{a.title}</span>
+                        <span className={styles.meta}>{a.artist}</span>
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
       </div>
 
       <div className={styles.hint} data-control="true">
-        <span>Drag to pan · Scroll to zoom · Click to enter a work.</span>
+        <span>
+          Drag to pan · Shift+drag to orbit · Scroll to zoom · Works face you as you turn.
+        </span>
         <button type="button" data-control="true" className={styles.reset} onClick={resetView}>
           Reset View
         </button>
