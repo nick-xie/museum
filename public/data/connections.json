@@ -21,6 +21,126 @@
     ]
   },
   {
+    "source": "starry-night",
+    "target": "girl-with-pearl-earring",
+    "score": 3,
+    "reasons": [
+      "blue",
+      "yellow",
+      "black"
+    ]
+  },
+  {
+    "source": "starry-night",
+    "target": "night-watch",
+    "score": 9,
+    "reasons": [
+      "night",
+      "restless",
+      "yellow",
+      "black",
+      "cinematic"
+    ]
+  },
+  {
+    "source": "starry-night",
+    "target": "great-wave",
+    "score": 7,
+    "reasons": [
+      "nature",
+      "restless",
+      "blue",
+      "black"
+    ]
+  },
+  {
+    "source": "starry-night",
+    "target": "persistence-of-memory",
+    "score": 7,
+    "reasons": [
+      "dreamlike",
+      "blue",
+      "yellow",
+      "black",
+      "cinematic"
+    ]
+  },
+  {
+    "source": "starry-night",
+    "target": "birth-of-venus",
+    "score": 4,
+    "reasons": [
+      "dreamlike",
+      "blue",
+      "yellow"
+    ]
+  },
+  {
+    "source": "starry-night",
+    "target": "sunflowers",
+    "score": 14,
+    "reasons": [
+      "nature",
+      "yellow",
+      "same artist",
+      "post-impressionism",
+      "favourite"
+    ]
+  },
+  {
+    "source": "water-lilies",
+    "target": "girl-with-pearl-earring",
+    "score": 4,
+    "reasons": [
+      "tender",
+      "blue",
+      "yellow"
+    ]
+  },
+  {
+    "source": "water-lilies",
+    "target": "great-wave",
+    "score": 4,
+    "reasons": [
+      "nature",
+      "blue"
+    ]
+  },
+  {
+    "source": "water-lilies",
+    "target": "persistence-of-memory",
+    "score": 4,
+    "reasons": [
+      "dreamlike",
+      "blue",
+      "yellow"
+    ]
+  },
+  {
+    "source": "water-lilies",
+    "target": "birth-of-venus",
+    "score": 9,
+    "reasons": [
+      "dreamlike",
+      "tender",
+      "blue",
+      "green",
+      "yellow",
+      "soft"
+    ]
+  },
+  {
+    "source": "water-lilies",
+    "target": "sunflowers",
+    "score": 7,
+    "reasons": [
+      "nature",
+      "tender",
+      "green",
+      "yellow"
+    ]
+  },
+  {
     "source": "the-kiss",
     "target": "the-scream",
     "score": 3,
@@ -30,12 +150,216 @@
     ]
   },
   {
+    "source": "the-kiss",
+    "target": "american-gothic",
+    "score": 3,
+    "reasons": [
+      "yellow",
+      "black",
+      "green"
+    ]
+  },
+  {
+    "source": "the-kiss",
+    "target": "birth-of-venus",
+    "score": 4,
+    "reasons": [
+      "reverent",
+      "yellow",
+      "green"
+    ]
+  },
+  {
+    "source": "the-kiss",
+    "target": "sunflowers",
+    "score": 4,
+    "reasons": [
+      "warm",
+      "yellow",
+      "green"
+    ]
+  },
+  {
     "source": "guernica",
     "target": "the-scream",
     "score": 3,
     "reasons": [
       "alarming",
       "black"
+    ]
+  },
+  {
+    "source": "guernica",
+    "target": "night-watch",
+    "score": 4,
+    "reasons": [
+      "history",
+      "black"
+    ]
+  },
+  {
+    "source": "guernica",
+    "target": "great-wave",
+    "score": 4,
+    "reasons": [
+      "cold",
+      "black",
+      "white"
+    ]
+  },
+  {
+    "source": "the-scream",
+    "target": "night-watch",
+    "score": 4,
+    "reasons": [
+      "restless",
+      "red",
+      "black"
+    ]
+  },
+  {
+    "source": "the-scream",
+    "target": "great-wave",
+    "score": 6,
+    "reasons": [
+      "restless",
+      "blue",
+      "black",
+      "iconic"
+    ]
+  },
+  {
+    "source": "the-scream",
+    "target": "american-gothic",
+    "score": 3,
+    "reasons": [
+      "black",
+      "iconic"
+    ]
+  },
+  {
+    "source": "girl-with-pearl-earring",
+    "target": "american-gothic",
+    "score": 7,
+    "reasons": [
+      "portrait",
+      "quiet",
+      "yellow",
+      "black"
+    ]
+  },
+  {
+    "source": "girl-with-pearl-earring",
+    "target": "persistence-of-memory",
+    "score": 3,
+    "reasons": [
+      "blue",
+      "yellow",
+      "black"
+    ]
+  },
+  {
+    "source": "girl-with-pearl-earring",
+    "target": "birth-of-venus",
+    "score": 4,
+    "reasons": [
+      "tender",
+      "blue",
+      "yellow"
+    ]
+  },
+  {
+    "source": "girl-with-pearl-earring",
+    "target": "sunflowers",
+    "score": 6,
+    "reasons": [
+      "light",
+      "tender",
+      "yellow"
+    ]
+  },
+  {
+    "source": "night-watch",
+    "target": "great-wave",
+    "score": 3,
+    "reasons": [
+      "restless",
+      "black"
+    ]
+  },
+  {
+    "source": "night-watch",
+    "target": "persistence-of-memory",
+    "score": 4,
+    "reasons": [
+      "black",
+      "yellow",
+      "cinematic"
+    ]
+  },
+  {
+    "source": "great-wave",
+    "target": "american-gothic",
+    "score": 3,
+    "reasons": [
+      "black",
+      "iconic"
+    ]
+  },
+  {
+    "source": "great-wave",
+    "target": "birth-of-venus",
+    "score": 4,
+    "reasons": [
+      "sea",
+      "blue"
+    ]
+  },
+  {
+    "source": "great-wave",
+    "target": "sunflowers",
+    "score": 3,
+    "reasons": [
+      "nature"
+    ]
+  },
+  {
+    "source": "american-gothic",
+    "target": "persistence-of-memory",
+    "score": 4,
+    "reasons": [
+      "uneasy",
+      "black",
+      "yellow"
+    ]
+  },
+  {
+    "source": "persistence-of-memory",
+    "target": "birth-of-venus",
+    "score": 4,
+    "reasons": [
+      "dreamlike",
+      "yellow",
+      "blue"
+    ]
+  },
+  {
+    "source": "persistence-of-memory",
+    "target": "sunflowers",
+    "score": 4,
+    "reasons": [
+      "time",
+      "yellow"
+    ]
+  },
+  {
+    "source": "birth-of-venus",
+    "target": "sunflowers",
+    "score": 4,
+    "reasons": [
+      "tender",
+      "green",
+      "yellow"
     ]
   }
 ]

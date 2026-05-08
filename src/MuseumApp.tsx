@@ -42,8 +42,8 @@ export default function MuseumApp() {
     <div className={styles.root}>
       <div className={styles.grain} aria-hidden="true" />
       <div className={styles.topLeft}>
-        <div className={styles.brand}>Personal Digital Museum</div>
-        <div className={styles.sub}>Wander. Notice. Remember.</div>
+        <div className={styles.brand}>museum.nickxie.ca</div>
+        <div className={styles.sub}>Some artworks I've seen and wanted to remember.</div>
       </div>
 
       <FloatingGallery
