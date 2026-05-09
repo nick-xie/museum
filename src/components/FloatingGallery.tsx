@@ -7,17 +7,9 @@ import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
 } from "react"
-import {
-  forceCenter,
-  forceCollide,
-  forceLink,
-  forceManyBody,
-  forceSimulation,
-  type Simulation,
-  type SimulationLinkDatum,
-  type SimulationNodeDatum,
-} from "d3-force"
+import type { Simulation, SimulationNodeDatum } from "d3-force"
 import type { Artwork, Connection } from "../types"
+import { createGraphSimulation, nudgeGraphSimulation, type GraphScoreLink } from "../lib/graphSimulation"
 import { createRng } from "../lib/seed"
 import styles from "./FloatingGallery.module.css"
 
@@ -33,7 +25,7 @@ type Node = {
 }
 
 type SimNode = Node & SimulationNodeDatum
-type SimLink = SimulationLinkDatum<SimNode> & { score: number }
+type SimLink = GraphScoreLink<SimNode>
 
 type CSSVars = CSSProperties & Record<`--${string}`, string>
 
@@ -48,10 +40,12 @@ type Props = {
 const INITIAL_TILT = { rx: -4, ry: 10 }
 /** Max pitch of the whole graph. */
 const MAX_TILT_X = 14
-/** Gentle reheat of the force sim while orbiting or panning (initial load uses alpha 0.9). */
-const NUDGE_SIM_ALPHA_CAP = 0.1
-const NUDGE_SIM_ALPHA_BUMP = 0.014
 const RESET_VIEW_MS = 900
+
+/** Extra tolerance around each artwork button for rect-based picking (screen px). */
+const NODE_PICK_PAD_PX = 24
+/** Movement past this turns a geometry hit into a pan drag instead of a click. */
+const NODE_PICK_DRAG_THRESHOLD_PX = 10
 
 function easeOutCubic(t: number) {
   return 1 - (1 - t) ** 3
@@ -90,6 +84,33 @@ function edgeSegmentStyle(
   }
 }
 
+/** Screen-space hit test (works when native hit-testing misses under preserve-3d). */
+function pickArtworkIdAt(
+  root: HTMLElement,
+  clientX: number,
+  clientY: number,
+  padPx: number,
+): string | null {
+  const els = Array.from(root.querySelectorAll<HTMLElement>("[data-node='true'][data-artwork-id]"))
+  let best: { id: string; d2: number } | null = null
+  for (const el of els) {
+    const r = el.getBoundingClientRect()
+    const left = r.left - padPx
+    const right = r.right + padPx
+    const top = r.top - padPx
+    const bottom = r.bottom + padPx
+    if (clientX < left || clientX > right || clientY < top || clientY > bottom) continue
+    const cx = (r.left + r.right) / 2
+    const cy = (r.top + r.bottom) / 2
+    const d2 = (clientX - cx) ** 2 + (clientY - cy) ** 2
+    if (!best || d2 < best.d2) {
+      const id = el.dataset.artworkId
+      if (id) best = { id, d2 }
+    }
+  }
+  return best?.id ?? null
+}
+
 export function FloatingGallery({ artworks, connections, seed = "museum", onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const initialViewRef = useRef<{
@@ -113,6 +134,14 @@ export function FloatingGallery({ artworks, connections, seed = "museum", onSele
     startRy: number
   } | null>(null)
   const suppressClickRef = useRef(false)
+  const pendingNodePickRef = useRef<{
+    pointerId: number
+    id: string
+    startX: number
+    startY: number
+    startPanX: number
+    startPanY: number
+  } | null>(null)
   const simRef = useRef<Simulation<SimNode, undefined> | null>(null)
   const resetAnimRafRef = useRef<number | null>(null)
   const latestViewRef = useRef({
@@ -177,20 +206,7 @@ export function FloatingGallery({ artworks, connections, seed = "museum", onSele
     const simNodes: SimNode[] = nodes.map((n) => ({ ...n, x: n.x * size.w, y: n.y * size.h }))
     const simLinks: SimLink[] = links.map((l) => ({ ...l }))
 
-    const sim = forceSimulation(simNodes)
-      .alpha(0.9)
-      .alphaDecay(0.025)
-      .velocityDecay(0.35)
-      .force("charge", forceManyBody().strength(-420))
-      .force("center", forceCenter(size.w / 2, size.h / 2))
-      .force(
-        "link",
-        forceLink<SimNode, SimLink>(simLinks)
-          .id((d) => d.id)
-          .distance((d) => Math.max(300, 560 - Math.min(220, d.score * 22)))
-          .strength((d) => Math.min(0.22, 0.05 + d.score / 62)),
-      )
-      .force("collide", forceCollide(82).strength(0.92))
+    const sim = createGraphSimulation(simNodes, simLinks, size)
 
     simRef.current = sim
 
@@ -212,11 +228,7 @@ export function FloatingGallery({ artworks, connections, seed = "museum", onSele
   }, [nodes, links, size.w, size.h])
 
   const nudgeLayout = useCallback(() => {
-    const sim = simRef.current
-    if (!sim) return
-    const next = Math.min(NUDGE_SIM_ALPHA_CAP, sim.alpha() + NUDGE_SIM_ALPHA_BUMP)
-    sim.alpha(next)
-    sim.restart()
+    nudgeGraphSimulation(simRef.current)
   }, [])
 
   const edgeOpacity = (a: string, b: string) => {
@@ -352,6 +364,21 @@ export function FloatingGallery({ artworks, connections, seed = "museum", onSele
     if (target.closest("[data-control='true']")) return
     if (target.closest("[data-node='true']")) return
 
+    const picked = pickArtworkIdAt(containerRef.current, e.clientX, e.clientY, NODE_PICK_PAD_PX)
+    if (picked) {
+      pendingNodePickRef.current = {
+        pointerId: e.pointerId,
+        id: picked,
+        startX: e.clientX,
+        startY: e.clientY,
+        startPanX: pan.x,
+        startPanY: pan.y,
+      }
+      containerRef.current.setPointerCapture(e.pointerId)
+      setHovered(picked)
+      return
+    }
+
     cancelResetAnimation()
 
     if (e.shiftKey) {
@@ -378,6 +405,33 @@ export function FloatingGallery({ artworks, connections, seed = "museum", onSele
   }
 
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const pend = pendingNodePickRef.current
+    if (pend && pend.pointerId === e.pointerId) {
+      const dx = e.clientX - pend.startX
+      const dy = e.clientY - pend.startY
+      if (Math.hypot(dx, dy) > NODE_PICK_DRAG_THRESHOLD_PX) {
+        pendingNodePickRef.current = null
+        setHovered(null)
+        dragState.current = {
+          pointerId: e.pointerId,
+          startX: pend.startX,
+          startY: pend.startY,
+          startPanX: pend.startPanX,
+          startPanY: pend.startPanY,
+          moved: true,
+        }
+        suppressClickRef.current = true
+        setPan({
+          x: pend.startPanX + dx,
+          y: pend.startPanY + dy,
+        })
+        nudgeLayout()
+        return
+      }
+      setHovered(pend.id)
+      return
+    }
+
     const rot = rotateState.current
     if (rot && rot.pointerId === e.pointerId) {
       const dx = e.clientX - rot.startX
@@ -392,23 +446,46 @@ export function FloatingGallery({ artworks, connections, seed = "museum", onSele
     }
 
     const drag = dragState.current
-    if (!drag || drag.pointerId !== e.pointerId) return
+    if (drag && drag.pointerId === e.pointerId) {
+      const dx = e.clientX - drag.startX
+      const dy = e.clientY - drag.startY
+      if (!drag.moved && Math.abs(dx) + Math.abs(dy) > 4) {
+        drag.moved = true
+        suppressClickRef.current = true
+      }
 
-    const dx = e.clientX - drag.startX
-    const dy = e.clientY - drag.startY
-    if (!drag.moved && Math.abs(dx) + Math.abs(dy) > 4) {
-      drag.moved = true
-      suppressClickRef.current = true
+      setPan({
+        x: drag.startPanX + dx,
+        y: drag.startPanY + dy,
+      })
+      nudgeLayout()
+      return
     }
 
-    setPan({
-      x: drag.startPanX + dx,
-      y: drag.startPanY + dy,
-    })
-    nudgeLayout()
+    if (!rotateState.current && !dragState.current && !pendingNodePickRef.current && containerRef.current) {
+      const id = pickArtworkIdAt(containerRef.current, e.clientX, e.clientY, NODE_PICK_PAD_PX)
+      setHovered(id)
+    }
   }
 
   const onPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const pending = pendingNodePickRef.current
+    if (pending && pending.pointerId === e.pointerId) {
+      pendingNodePickRef.current = null
+      if (containerRef.current?.hasPointerCapture(e.pointerId)) {
+        containerRef.current.releasePointerCapture(e.pointerId)
+      }
+      const dx = e.clientX - pending.startX
+      const dy = e.clientY - pending.startY
+      if (Math.hypot(dx, dy) <= NODE_PICK_DRAG_THRESHOLD_PX && !suppressClickRef.current) {
+        onSelect(pending.id)
+      }
+      window.setTimeout(() => {
+        suppressClickRef.current = false
+      }, 0)
+      return
+    }
+
     const rot = rotateState.current
     if (rot && rot.pointerId === e.pointerId) {
       if (containerRef.current?.hasPointerCapture(e.pointerId)) {
@@ -441,6 +518,11 @@ export function FloatingGallery({ artworks, connections, seed = "museum", onSele
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
+      onPointerLeave={(e) => {
+        const next = e.relatedTarget
+        if (next instanceof Element && e.currentTarget.contains(next)) return
+        setHovered(null)
+      }}
     >
       <div className={styles.perspective}>
         <div
@@ -459,33 +541,36 @@ export function FloatingGallery({ artworks, connections, seed = "museum", onSele
               transform: `rotateY(${tilt.ry}deg) rotateX(${tilt.rx}deg)`,
             }}
           >
-            {connections.map((c) => {
-              const a = positions.get(c.source)
-              const b = positions.get(c.target)
-              if (!a || !b) return null
-              if (!depthById.has(c.source) || !depthById.has(c.target)) return null
-              const za = depthById.get(c.source) ?? 0
-              const zb = depthById.get(c.target) ?? 0
-              const op = edgeOpacity(c.source, c.target)
-              const h = Math.max(1.2, Math.min(2.8, 0.85 + c.score / 7))
-              const { width, transform } = edgeSegmentStyle(a.x, a.y, za, b.x, b.y, zb)
-              return (
-                <div
-                  key={`${c.source}__${c.target}`}
-                  className={styles.edge3d}
-                  style={
-                    {
-                      width,
-                      height: h,
-                      opacity: op,
-                      transform,
-                    } as CSSProperties
-                  }
-                  aria-hidden
-                />
-              )
-            })}
+            <div className={styles.edgesLayer}>
+              {connections.map((c) => {
+                const a = positions.get(c.source)
+                const b = positions.get(c.target)
+                if (!a || !b) return null
+                if (!depthById.has(c.source) || !depthById.has(c.target)) return null
+                const za = depthById.get(c.source) ?? 0
+                const zb = depthById.get(c.target) ?? 0
+                const op = edgeOpacity(c.source, c.target)
+                const h = Math.max(1.2, Math.min(2.8, 0.85 + c.score / 7))
+                const { width, transform } = edgeSegmentStyle(a.x, a.y, za, b.x, b.y, zb)
+                return (
+                  <div
+                    key={`${c.source}__${c.target}`}
+                    className={styles.edge3d}
+                    style={
+                      {
+                        width,
+                        height: h,
+                        opacity: op,
+                        transform,
+                      } as CSSProperties
+                    }
+                    aria-hidden
+                  />
+                )
+              })}
+            </div>
 
+            <div className={styles.nodesLayer}>
             {artworks.map((a) => {
               const p = positions.get(a.id)
               if (!p) return null
@@ -508,13 +593,13 @@ export function FloatingGallery({ artworks, connections, seed = "museum", onSele
                     <button
                       type="button"
                       data-node="true"
-                      className={styles.node}
+                      data-artwork-id={a.id}
+                      className={`${styles.node} ${hovered === a.id ? styles.nodeHover : ""}`}
                       style={{ "--phase": `${drift}s` } as CSSVars}
                       onClick={() => {
                         if (!suppressClickRef.current) onSelect(a.id)
                       }}
                       onPointerEnter={() => setHovered(a.id)}
-                      onPointerLeave={() => setHovered(null)}
                     >
                       <span className={styles.thumb}>
                         <img src={a.imageUrl} alt={`${a.title} by ${a.artist}`} draggable={false} />
@@ -528,6 +613,7 @@ export function FloatingGallery({ artworks, connections, seed = "museum", onSele
                 </div>
               )
             })}
+            </div>
           </div>
         </div>
       </div>

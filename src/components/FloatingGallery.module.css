@@ -30,6 +30,31 @@
   will-change: transform;
 }
 
+/**
+ * Split edges vs nodes + slight translateZ bias: under preserve-3d, segments can
+ * depth-sort in front of thumbnails; edges skip pointer-events but hit-testing
+ * then misses the artwork behind another quad. Pushing edges back and nodes
+ * forward keeps thumbnails nearer the camera than connector geometry for paint
+ * and picking (edges stay pointer-events: none).
+ */
+.edgesLayer {
+  position: absolute;
+  inset: 0;
+  transform: translateZ(-28px);
+  transform-style: preserve-3d;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.nodesLayer {
+  position: absolute;
+  inset: 0;
+  transform: translateZ(28px);
+  transform-style: preserve-3d;
+  z-index: 1;
+  pointer-events: none;
+}
+
 .edge3d {
   position: absolute;
   left: 0;
@@ -58,6 +83,7 @@
   overflow: visible;
   transform-origin: 0 0;
   transform-style: preserve-3d;
+  pointer-events: auto;
 }
 
 .nodeFace {
@@ -74,7 +100,9 @@
   translate: -50% -50%;
   background: transparent;
   border: 0;
-  padding: 0;
+  /* Invisible hit slop so 3D picking gaps are easier to target */
+  padding: 22px;
+  margin: -22px;
   cursor: pointer;
   display: grid;
   gap: 10px;
@@ -114,7 +142,8 @@
   animation-delay: var(--phase, 0s);
 }
 
-.node:hover .thumb {
+.node:hover .thumb,
+.nodeHover .thumb {
   transform: scale(1.08);
   box-shadow:
     0 0 0 1px rgba(195, 147, 255, 0.22) inset,
@@ -134,7 +163,8 @@
   pointer-events: none;
 }
 
-.node:hover .label {
+.node:hover .label,
+.nodeHover .label {
   opacity: 1;
   transform: translateY(0);
 }
